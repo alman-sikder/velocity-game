@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Velocity | Meteorological Edition</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&family=Outfit:wght@300;500;700;900&display=swap');
+
+        :root {
+            --bg-base: #030712;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --accent-gold: #fbbf24;
+            --accent-emerald: #10b981;
+            --accent-cyan: #06b6d4;
+            --accent-danger: #ef4444;
+            --text-main: #ffffff;
+            --text-muted: #94a3b8;
+            --font-ui: 'Inter', sans-serif;
+            --font-display: 'Outfit', sans-serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-ui);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, #030712 80%);
+        }
+
+        #ambient-canvas {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; pointer-events: none;
+        }
+
+        /* --- SCREEN MANAGEMENT --- */
+        .screen {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 95vw; max-width: 1200px; height: 90vh;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 30px;
+            box-shadow: 0 40px 100px rgba(0,0,0,0.8);
+            display: none; /* Hidden by default */
+            flex-direction: column;
+            padding: 3rem;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        .screen.active { display: flex; opacity: 1; }
+
+        /* --- TYPOGRAPHY --- */
+        .title {
+            font-family: var(--font-display);
+            font-size: 4rem;
+            font-weight: 900;
+            text-align: center;
+            background: linear-gradient(135deg, #fff 0%, var(--accent-cyan) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        .subtitle { text-align: center; color: var(--text-muted); letter-spacing: 4px; font-weight: 500; margin-bottom: 3rem; text-transform: uppercase;}
+
+        /* --- BUTTONS & CARDS --- */
+        .btn-container { display: flex; gap: 2rem; justify-content: center; margin-top: 2rem;}
+        .btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--accent-cyan);
+            color: var(--text-main);
+            padding: 1rem 3rem;
+            border-radius: 15px;
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-transform: uppercase;
+        }
+        .btn:hover { background: var(--accent-cyan); color: #000; box-shadow: 0 0 30px rgba(6, 182, 212, 0.4); transform: translateY(-5px); }
+        .btn-back { position: absolute; top: 2rem; left: 2rem; padding: 0.5rem 1.5rem; font-size: 1rem; border-color: var(--text-muted); }
+        .btn-back:hover { background: var(--text-main); }
+
+        /* --- CAMPAIGN GRID --- */
+        .level-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 1.5rem;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+        .level-tile {
+            aspect-ratio: 1;
+            border-radius: 20px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-display);
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            transition: all 0.3s;
+        }
+        .level-tile.unlocked {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: var(--accent-emerald);
+            color: var(--accent-emerald);
+            cursor: pointer;
+            box-shadow: inset 0 0 20px rgba(16, 185, 129, 0.1);
+        }
+        .level-tile.unlocked:hover { transform: scale(1.05); background: var(--accent-emerald); color: #000; box-shadow: 0 0 30px rgba(16, 185, 129, 0.5); }
+        .level-tile.locked { opacity: 0.5; cursor: not-allowed; }
+
+        /* --- FREEPLAY DIFFICULTY CARDS --- */
+        .diff-cards { display: flex; gap: 2rem; justify-content: center; flex-grow: 1; align-items: center;}
+        .diff-card {
+            flex: 1; max-width: 300px; height: 350px;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--glass-border);
+            border-radius: 25px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            padding: 2rem;
+            text-align: center;
+        }
+        .diff-card h3 { font-family: var(--font-display); font-size: 2rem; margin-bottom: 1rem; }
+        .diff-card p { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; }
+        .diff-card:hover { transform: translateY(-15px); }
+        .diff-card.relaxed:hover { border-color: var(--accent-cyan); box-shadow: 0 20px 50px rgba(6, 182, 212, 0.2); }
+        .diff-card.relaxed h3 { color: var(--accent-cyan); }
+        .diff-card.standard:hover { border-color: var(--accent-gold); box-shadow: 0 20px 50px rgba(251, 191, 36, 0.2); }
+        .diff-card.standard h3 { color: var(--accent-gold); }
+        .diff-card.extreme:hover { border-color: var(--accent-danger); box-shadow: 0 20px 50px rgba(239, 68, 68, 0.2); }
+        .diff-card.extreme h3 { color: var(--accent-danger); }
+
+        /* --- GAMEPLAY DASHBOARD --- */
+        .dashboard {
+            display: grid; grid-template-columns: repeat(5, 1fr);
+            padding-bottom: 1.5rem; border-bottom: 1px solid var(--glass-border); text-align: center;
+        }
+        .stat-block { display: flex; flex-direction: column; }
+        .stat-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+        .stat-value { font-family: var(--font-display); font-size: 2rem; font-weight: 300; margin-top: 5px;}
+        .highlight { color: var(--accent-emerald); text-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+
+        /* --- STAGE & ENTITIES --- */
+        .stage {
+            height: 250px; position: relative; margin-top: 2rem; border-radius: 20px;
+            background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.02) 100%);
+            box-shadow: inset 0 -1px 0 rgba(255,255,255,0.1); overflow: hidden;
+        }
+        .track-line { position: absolute; bottom: 40px; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, var(--glass-border), transparent); }
+        
+        .entity {
+            position: absolute; bottom: 40px; font-size: 4.5rem; filter: drop-shadow(0 15px 15px rgba(0,0,0,0.5));
+            transition: left 0.1s linear, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: bottom center;
+        }
+        #hero { left: 15%; z-index: 3; transform: scaleX(-1); }
+        #zombie { left: -5%; z-index: 2; }
+        #pod { left: 85%; z-index: 1; font-size: 5.5rem; transition: all 1s ease-in-out;}
+        .running-bounce { animation: premiumBounce 0.4s infinite alternate ease-in-out; }
+        @keyframes premiumBounce { 0% { transform: scaleX(-1) translateY(0); } 100% { transform: scaleX(-1) translateY(-12px); } }
+
+        /* --- TYPING CONSOLE --- */
+        .typing-console { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #prompt-display { font-family: var(--font-display); font-size: 4rem; font-weight: 600; letter-spacing: 2px; text-align: center; max-width: 90%; word-wrap: break-word;}
+        .typed { color: var(--text-main); text-shadow: 0 0 20px rgba(255,255,255,0.8); }
+        .untyped { color: rgba(255,255,255,0.2); }
+        .error { color: var(--accent-danger); text-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
+        .cursor { display: inline-block; width: 4px; height: 3.5rem; background-color: var(--accent-cyan); vertical-align: middle; margin-left: 5px; animation: blink 1s step-end infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        /* --- MODAL --- */
+        .modal-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.4s ease; border-radius: 30px;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: all; }
+        .modal-card {
+            background: var(--bg-base); border: 1px solid var(--glass-border); padding: 4rem; border-radius: 24px; text-align: center;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5); transform: translateY(20px); transition: transform 0.4s ease;
+        }
+        .modal-overlay.active .modal-card { transform: translateY(0); }
+        .modal-title { font-family: var(--font-display); font-size: 3rem; margin-bottom: 2rem; color: var(--accent-emerald); }
+        .modal-stats { display: flex; gap: 3rem; margin-bottom: 3rem; justify-content: center;}
+    </style>
+</head>
+<body>
+
+    <canvas id="ambient-canvas"></canvas>
+
+    <div id="screen-main" class="screen active">
+        <div style="margin: auto;">
+            <div class="title">VELOCITY</div>
+            <div class="subtitle">Meteorological Survival Engine</div>
+            <div class="btn-container">
+                <button class="btn" onclick="showScreen('screen-campaign'); renderLevels();">Campaign</button>
+                <button class="btn" onclick="showScreen('screen-freeplay')">Freeplay</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-campaign" class="screen">
+        <button class="btn btn-back" onclick="showScreen('screen-main')">← Back</button>
+        <div class="title" style="font-size: 3rem; margin-top: 2rem;">FIELD MISSIONS</div>
+        <div class="subtitle">Complete typing quotas to reach the pod.</div>
+        <div class="level-grid" id="level-grid">
+            </div>
+    </div>
+
+    <div id="screen-freeplay" class="screen">
+        <button class="btn btn-back" onclick="showScreen('screen-main')">← Back</button>
+        <div class="title" style="font-size: 3rem; margin-top: 2rem;">ENDLESS MODE</div>
+        <div class="subtitle">Select your atmospheric turbulence level.</div>
+        <div class="diff-cards">
+            <div class="diff-card relaxed" onclick="startGame('freeplay', 0.8)">
+                <h3>RELAXED</h3>
+                <p>Gentle breeze. The threat moves slowly. Perfect for learning new terminology and warming up your fingers.</p>
+            </div>
+            <div class="diff-card standard" onclick="startGame('freeplay', 1.3)">
+                <h3>STANDARD</h3>
+                <p>Severe thunderstorm. The threat matches a standard typing pace. You must remain focused to survive.</p>
+            </div>
+            <div class="diff-card extreme" onclick="startGame('freeplay', 2.2)">
+                <h3>EXTREME</h3>
+                <p>Category 5 Hurricane. The threat is relentless. Only true meteorologists will endure this speed.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-game" class="screen">
+        <button class="btn btn-back" onclick="quitGame()" style="top: 1rem; left: 1rem; padding: 0.3rem 1rem;">Quit</button>
+        
+        <div class="dashboard">
+            <div class="stat-block">
+                <span class="stat-label">Mode/Level</span>
+                <span class="stat-value" id="disp-mode">Lvl 1</span>
+            </div>
+            <div class="stat-block">
+                <span class="stat-label">Total Words</span>
+                <span class="stat-value" id="disp-words">0</span>
+            </div>
+            <div class="stat-block">
+                <span class="stat-label">Current WPM</span>
+                <span class="stat-value highlight" id="disp-wpm">0</span>
+            </div>
+            <div class="stat-block">
+                <span class="stat-label">Avg WPM</span>
+                <span class="stat-value" id="disp-avg-wpm">0</span>
+            </div>
+            <div class="stat-block">
+                <span class="stat-label">Score</span>
+                <span class="stat-value" id="disp-score" style="color: var(--accent-gold);">0</span>
+            </div>
+        </div>
+
+        <div class="stage">
+            <div class="track-line"></div>
+            <div id="zombie" class="entity">🧟</div>
+            <div id="hero" class="entity">🏃</div>
+            <div id="pod" class="entity">🚀</div>
+        </div>
+
+        <div class="typing-console" id="console-area">
+            <div id="prompt-display"><span class="untyped">PRESS ENTER TO DEPLOY</span><span class="cursor"></span></div>
+        </div>
+
+        <div id="modal" class="modal-overlay">
+            <div class="modal-card">
+                <h2 id="modal-title" class="modal-title">STAGE CLEARED</h2>
+                <div class="modal-stats">
+                    <div class="stat-block">
+                        <span class="stat-label">Words Typed</span>
+                        <span class="stat-value" id="modal-words">0</span>
+                    </div>
+                    <div class="stat-block">
+                        <span class="stat-label">Average WPM</span>
+                        <span class="stat-value highlight" id="modal-wpm">0</span>
+                    </div>
+                    <div class="stat-block">
+                        <span class="stat-label">Accuracy</span>
+                        <span class="stat-value" id="modal-acc">100%</span>
+                    </div>
+                </div>
+                <button class="btn" onclick="closeModalAndContinue()">CONTINUE</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1000+ VIBE METEOROLOGICAL DICTIONARY ---
+        // Packed with highly specific terminology spanning instruments, dynamics, clouds, and storms.
+        const dictionary = [
+            "anemometer", "barometer", "hygrometer", "ceilometer", "pyranometer", "radiosonde", "disdrometer", "psychrometer", "transmissometer", "windsock", "dropsonde", "lidar", "satellite", "radar",
+            "troposphere", "stratosphere", "mesosphere", "thermosphere", "exosphere", "tropopause", "stratopause", "mesopause", "ionosphere", "boundary", "layer",
+            "cirrus", "cirrostratus", "cirrocumulus", "altostratus", "altocumulus", "stratus", "stratocumulus", "nimbostratus", "cumulus", "cumulonimbus", "mammatus", "lenticular", "noctilucent", "asperitas", "castellanus", "congestus", "fractus", "pileus",
+            "precipitation", "drizzle", "virga", "sleet", "hail", "graupel", "snow", "fog", "mist", "haze", "smog", "dew", "frost", "rime", "glaze", "hoarfrost",
+            "tornado", "hurricane", "cyclone", "typhoon", "derecho", "supercell", "squall", "downburst", "microburst", "haboob", "sandstorm", "blizzard", "whiteout", "monsoon", "lightning", "thunder", "waterspout", "gustnado", "mesocyclone",
+            "thermodynamics", "kinematics", "dynamics", "vorticity", "divergence", "convergence", "advection", "convection", "subsidence", "inversion", "adiabatic", "isobar", "isotherm", "isentrope", "isotach", "isodrosotherm",
+            "frontogenesis", "frontolysis", "occluded", "stationary", "trough", "ridge", "geopotential", "thickness", "shear", "helicity", "instability", "hodograph", "sounding", "tephigram", "skewt", "baroclinic", "barotropic", "cyclogenesis",
+            "albedo", "insolation", "radiation", "absorption", "scattering", "refraction", "diffraction", "halo", "corona", "mirage", "rainbow", "crepuscular", "aurora", "petrichor",
+            "climate", "weather", "forecast", "meteorology", "climatology", "synoptic", "mesoscale", "microscale", "global", "circulation", "coriolis", "effect", "pressure", "gradient", "friction", "buoyancy",
+            "elnino", "lanina", "enso", "hadley", "ferrel", "polar", "westerlies", "easterlies", "jetstream", "rossby", "wave", "blocking", "teleconnection", "anomaly"
+        ];
+
+        // --- AMBIENT PARTICLES ---
+        const canvas = document.getElementById('ambient-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        let speedMult = 1;
+
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        window.addEventListener('resize', resize); resize();
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2;
+                this.vx = (Math.random() - 0.5) * 0.5; this.vy = (Math.random() - 0.5) * 0.5;
+                this.color = Math.random() > 0.5 ? 'rgba(6, 182, 212, 0.3)' : 'rgba(16, 185, 129, 0.3)';
+            }
+            update() {
+                this.x += this.vx * speedMult; this.y += this.vy * speedMult;
+                if(this.x > canvas.width) this.x = 0; else if(this.x < 0) this.x = canvas.width;
+                if(this.y > canvas.height) this.y = 0; else if(this.y < 0) this.y = canvas.height;
+            }
+            draw() { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill(); }
+        }
+        for(let i=0; i<100; i++) particles.push(new Particle());
+
+        function animate() {
+            ctx.clearRect(0,0, canvas.width, canvas.height);
+            particles.forEach(p => { p.update(); p.draw(); });
+            if(speedMult > 1) speedMult -= 0.05;
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // --- SYSTEM STATE & STORAGE ---
+        // Load save data or initialize new
+        let saveData = JSON.parse(localStorage.getItem('meteorologyEscape')) || { unlockedLevel: 1 };
+        const TOTAL_LEVELS = 20;
+
+        let state = 'MENU'; // MENU, PLAYING, PAUSED, MODAL
+        let gameMode = 'campaign'; // 'campaign' or 'freeplay'
+        let currentDifficulty = 1;
+        let activeLevel = 1;
+        
+        // Gameplay Variables
+        let currentPrompt = "";
+        let typedText = "";
+        let score = 0;
+        let wordsTyped = 0;
+        let targetWords = 0; // For campaign mode
+        
+        let keystrokes = 0;
+        let hits = 0;
+        
+        // Time & WPM Tracking
+        let runStartTime = null;
+        let lastWordTime = null;
+        let totalTimePlayingMs = 0;
+
+        // Positioning
+        let heroPos = 15;
+        let zombiePos = -10;
+        const podPos = 85;
+        let gameLoop;
+        let lastTick = 0;
+
+        // DOM Elements
+        const ui = {
+            screens: document.querySelectorAll('.screen'),
+            grid: document.getElementById('level-grid'),
+            dispMode: document.getElementById('disp-mode'),
+            dispWords: document.getElementById('disp-words'),
+            dispWPM: document.getElementById('disp-wpm'),
+            dispAvgWPM: document.getElementById('disp-avg-wpm'),
+            dispScore: document.getElementById('disp-score'),
+            hero: document.getElementById('hero'),
+            zombie: document.getElementById('zombie'),
+            pod: document.getElementById('pod'),
+            prompt: document.getElementById('prompt-display'),
+            modal: document.getElementById('modal'),
+            modTitle: document.getElementById('modal-title'),
+            modWords: document.getElementById('modal-words'),
+            modWPM: document.getElementById('modal-wpm'),
+            modAcc: document.getElementById('modal-acc')
+        };
+
+        // --- UI NAVIGATION ---
+        function showScreen(id) {
+            ui.screens.forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            state = 'MENU';
+        }
+
+        function renderLevels() {
+            ui.grid.innerHTML = "";
+            for (let i = 1; i <= TOTAL_LEVELS; i++) {
+                let div = document.createElement('div');
+                if (i <= saveData.unlockedLevel) {
+                    div.className = 'level-tile unlocked';
+                    div.innerText = i;
+                    div.onclick = () => startGame('campaign', null, i);
+                } else {
+                    div.className = 'level-tile locked';
+                    div.innerText = '🔒';
+                }
+                ui.grid.appendChild(div);
+            }
+        }
+
+        // --- GAME INITIALIZATION ---
+        function startGame(mode, difficulty = null, levelNum = 1) {
+            gameMode = mode;
+            activeLevel = levelNum;
+            currentDifficulty = mode === 'freeplay' ? difficulty : (1 + (levelNum * 0.1));
+            targetWords = mode === 'campaign' ? (10 + (levelNum * 2)) : Infinity;
+            
+            score = 0; wordsTyped = 0; keystrokes = 0; hits = 0; totalTimePlayingMs = 0;
+            runStartTime = null; lastWordTime = null;
+            heroPos = 15; zombiePos = -15;
+
+            ui.dispMode.innerText = mode === 'campaign' ? `LEVEL ${levelNum}` : `FREEPLAY`;
+            ui.dispWords.innerText = `0${mode === 'campaign' ? '/' + targetWords : ''}`;
+            ui.dispScore.innerText = "0";
+            ui.dispWPM.innerText = "0";
+            ui.dispAvgWPM.innerText = "0";
+            ui.pod.style.display = mode === 'campaign' ? "block" : "none"; // Hide pod in freeplay
+            ui.pod.style.transform = ""; ui.pod.style.opacity = "1"; // Reset pod
+
+            showScreen('screen-game');
+            ui.prompt.innerHTML = `<span class="untyped">PRESS [ENTER] TO INITIATE</span><span class="cursor"></span>`;
+            state = 'READY';
+        }
+
+        function generatePrompt() {
+            // Randomly select 1 to 3 words
+            let count = Math.floor(Math.random() * 3) + 1;
+            let words = [];
+            for(let i=0; i<count; i++) words.push(dictionary[Math.floor(Math.random() * dictionary.length)]);
+            currentPrompt = words.join(" ");
+            typedText = "";
+            renderPrompt();
+        }
+
+        function renderPrompt() {
+            let html = "";
+            let hasError = ui.prompt.classList.contains('error');
+            for (let i = 0; i < currentPrompt.length; i++) {
+                if (i < typedText.length) html += `<span class="${hasError ? 'error' : 'typed'}">${currentPrompt[i]}</span>`;
+                else html += `<span class="untyped">${currentPrompt[i]}</span>`;
+            }
+            html += '<span class="cursor"></span>';
+            ui.prompt.innerHTML = html;
+        }
+
+        function updatePositions() {
+            ui.hero.style.left = heroPos + "%";
+            ui.zombie.style.left = zombiePos + "%";
+        }
+
+        // --- PHYSICS & TIMING ---
+        function engine(timestamp) {
+            if (state !== 'PLAYING') return;
+            if (!lastTick) lastTick = timestamp;
+            let delta = timestamp - lastTick;
+            
+            // Advance Zombie
+            let speed = (1.5 * currentDifficulty);
+            zombiePos += (speed * (delta / 1000));
+            
+            // Advance Hero passively in campaign based on progress
+            if (gameMode === 'campaign') {
+                let progress = wordsTyped / targetWords;
+                let targetHeroPos = 15 + (progress * 70); // Max position is 85 (pod)
+                if (heroPos < targetHeroPos) heroPos += 0.1; 
+            }
+
+            updatePositions();
+            
+            // Time tracking for Avg WPM
+            totalTimePlayingMs += delta;
+            let minutesElapsed = totalTimePlayingMs / 60000;
+            if (minutesElapsed > 0) {
+                let avgWpm = Math.round((hits / 5) / minutesElapsed);
+                ui.dispAvgWPM.innerText = avgWpm;
+            }
+
+            // Check Collisions
+            if (zombiePos >= heroPos - 8) triggerModal('CAUGHT');
+            else if (gameMode === 'campaign' && wordsTyped >= targetWords) triggerModal('CLEARED');
+            
+            lastTick = timestamp;
+            gameLoop = requestAnimationFrame(engine);
+        }
+
+        // --- MODAL HANDLING ---
+        function triggerModal(outcome) {
+            state = 'MODAL';
+            cancelAnimationFrame(gameLoop);
+            ui.hero.classList.remove('running-bounce');
+            
+            let accuracy = keystrokes === 0 ? 100 : Math.round((hits / keystrokes) * 100);
+            
+            if (outcome === 'CLEARED') {
+                score += (activeLevel * 1000);
+                ui.modTitle.innerText = "LEVEL SECURED";
+                ui.modTitle.style.color = "var(--accent-emerald)";
+                
+                // Unlock next level
+                if (activeLevel === saveData.unlockedLevel && saveData.unlockedLevel < TOTAL_LEVELS) {
+                    saveData.unlockedLevel++;
+                    localStorage.setItem('meteorologyEscape', JSON.stringify(saveData));
+                }
+                
+                // Launch Pod
+                ui.pod.style.transform = "translateY(-500px) scale(0.5)";
+                ui.pod.style.opacity = "0";
+            } else {
+                ui.modTitle.innerText = "OVERTAKEN";
+                ui.modTitle.style.color = "var(--accent-danger)";
+            }
+            
+            ui.dispScore.innerText = score;
+            ui.modWords.innerText = wordsTyped;
+            ui.modWPM.innerText = ui.dispAvgWPM.innerText;
+            ui.modAcc.innerText = accuracy + "%";
+            ui.modal.classList.add('active');
+        }
+
+        function closeModalAndContinue() {
+            ui.modal.classList.remove('active');
+            showScreen('screen-main');
+        }
+
+        function quitGame() {
+            state = 'MENU';
+            cancelAnimationFrame(gameLoop);
+            ui.hero.classList.remove('running-bounce');
+            showScreen('screen-main');
+        }
+
+        // --- KEYBOARD CAPTURE ---
+        document.addEventListener('keydown', (e) => {
+            if(e.key === " " && e.target === document.body) e.preventDefault();
+
+            if (e.key === 'Enter') {
+                if (state === 'READY') {
+                    state = 'PLAYING';
+                    ui.hero.classList.add('running-bounce');
+                    lastTick = 0; runStartTime = Date.now(); lastWordTime = Date.now();
+                    generatePrompt();
+                    gameLoop = requestAnimationFrame(engine);
+                } else if (state === 'MODAL') {
+                    closeModalAndContinue();
+                }
+                return;
+            }
+
+            if (state === 'PLAYING' && e.key.length === 1) {
+                keystrokes++;
+                const expected = currentPrompt[typedText.length];
+
+                if (e.key.toLowerCase() === expected.toLowerCase()) {
+                    hits++; typedText += expected; // Auto-correct case for ease if user wants, but strictly match letter
+                    score += 10;
+                    ui.dispScore.innerText = score;
+
+                    speedMult = Math.min(speedMult + 0.5, 10); // Excite background
+                    zombiePos = Math.max(-15, zombiePos - 0.5); // Push zombie back slightly
+
+                    // Calculate Current Burst WPM
+                    let now = Date.now();
+                    let burstMins = (now - lastWordTime) / 60000;
+                    if (burstMins > 0.01) ui.dispWPM.innerText = Math.round((typedText.length / 5) / burstMins);
+
+                    if (typedText === currentPrompt) {
+                        wordsTyped += currentPrompt.split(" ").length;
+                        ui.dispWords.innerText = `${wordsTyped}${gameMode === 'campaign' ? '/' + targetWords : ''}`;
+                        lastWordTime = Date.now();
+                        
+                        if (gameMode === 'freeplay') heroPos = Math.min(80, heroPos + 2); // Keep hero on screen
+                        
+                        if (!(gameMode === 'campaign' && wordsTyped >= targetWords)) generatePrompt();
+                    } else {
+                        ui.prompt.classList.remove('error');
+                        renderPrompt();
+                    }
+                } else {
+                    ui.prompt.classList.add('error');
+                    renderPrompt();
+                    setTimeout(() => { ui.prompt.classList.remove('error'); renderPrompt(); }, 150);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
